@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Night Ink — Editor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    :root {
+      --bg: #0d0f14;
+      --panel: #141826;
+      --text: #e9e9ee;
+      --muted: #9a9aa5;
+      --accent: #c84848;
+      --border: rgba(255,255,255,0.08);
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Georgia, serif;
+      line-height: 1.7;
+    }
+
+    main {
+      max-width: 70ch;
+      margin: 80px auto;
+      padding: 0 20px;
+    }
+
+    h1, h2 {
+      font-weight: normal;
+      margin-bottom: 20px;
+    }
+
+    input, textarea, select, button {
+      width: 100%;
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 12px;
+      margin-bottom: 12px;
+      font-family: inherit;
+      font-size: 1rem;
+    }
+
+    textarea {
+      min-height: 240px;
+      resize: vertical;
+    }
+
+    button {
+      cursor: pointer;
+      background: transparent;
+    }
+
+    button:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+    }
+  </style>
+</head>
+
+<body>
+
+<main>
+
+  <!-- AUTH -->
+  <section id="auth">
+    <h1>Editor Login</h1>
+    <input id="email" type="email" placeholder="Email" />
+    <input id="password" type="password" placeholder="Password" />
+    <button onclick="login()">Log In</button>
+  </section>
+
+  <!-- EDITOR PANEL -->
+  <section id="panel" class="hidden">
+
+    <button onclick="logout()">Log Out</button>
+
+    <h2>Create Book</h2>
+    <input id="book-title" placeholder="Book title" />
+    <textarea id="book-desc" placeholder="Description"></textarea>
+    <button onclick="createBook()">Create Book</button>
+
+    <h2>Create / Edit Chapter</h2>
+
+    <select id="book-select"></select>
+
+    <div class="row">
+      <input
+        id="chapter-number"
+        type="number"
+        min="1"
+        placeholder="Chapter #"
+      />
+      <input
+        id="chapter-title"
+        placeholder="Chapter title"
+      />
+    </div>
+
+    <textarea
+      id="chapter-content"
+      placeholder="Chapter content..."
+    ></textarea>
+
+    <button onclick="saveChapter()">Save Chapter</button>
+    <button onclick="deleteBook()">Delete Selected Book</button>
+
+  </section>
+
+</main>
+
+<!-- SUPABASE -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  const supabaseClient = supabase.createClient(
+    "https://plaxykqkhnbelwajltdk.supabase.co",
+    "sb_publishable_iEV5oVbJCvpFxslRyu5eNw_oMv2qvBt"
+);
+
+  // ===== LOGIN =====
+  async function login() {
+    const email = email.value = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+
+    if (!email || !password) {
+      alert("Enter email and password");
+      return;
+    }
+
+    const { error } =
+      await supabaseClient.auth.signInWithPassword({ email, password });
+
+    if (error) alert(error.message);
+    else init();
+  }
+
+  // ===== LOGOUT =====
+  async function logout() {
+    await supabaseClient.auth.signOut();
+    document.getElementById("panel").classList.add("hidden");
+    document.getElementById("auth").classList.remove("hidden");
+  }
+
+  // ===== INIT =====
+  async function init() {
+    document.getElementById("auth").classList.add("hidden");
+    document.getElementById("panel").classList.remove("hidden");
+    await loadBooks();
+  }
+
+  // ===== LOAD BOOKS =====
+  async function loadBooks() {
+    const { data, error } = await supabaseClient
+      .from("books")
+      .select("id, title")
+      .order("created_at");
+
+    if (error) return alert(error.message);
+
+    const select = document.getElementById("book-select");
+    select.innerHTML = "";
+
+    data.forEach(book => {
+      const opt = document.createElement("option");
+      opt.value = book.id;
+      opt.textContent = book.title;
+      select.appendChild(opt);
+    });
+  }
+
+  // ===== CREATE BOOK =====
+  async function createBook() {
+    const title = document.getElementById("book-title").value;
+    const description = document.getElementById("book-desc").value;
+
+    if (!title) return alert("Title required");
+
+    const { error } = await supabaseClient
+      .from("books")
+      .insert([{ title, description }]);
+
+    if (error) alert(error.message);
+    else {
+      alert("Book created");
+      loadBooks();
+    }
+  }
+
+  // ===== LOAD CHAPTER FOR EDITING =====
+  async function loadChapter() {
+    const book_id = document.getElementById("book-select").value;
+    const chapter_number =
+      parseInt(document.getElementById("chapter-number").value);
+
+    if (!book_id || !chapter_number) return;
+
+    const { data, error } = await supabaseClient
+      .from("chapters")
+      .select("title, content")
+      .eq("book_id", book_id)
+      .eq("chapter_number", chapter_number)
+      .single();
+
+    if (error || !data) {
+      document.getElementById("chapter-title").value = "";
+      document.getElementById("chapter-content").value = "";
+      return;
+    }
+
+    document.getElementById("chapter-title").value = data.title;
+    document.getElementById("chapter-content").value = data.content;
+  }
+
+  document
+    .getElementById("chapter-number")
+    .addEventListener("change", loadChapter);
+
+  // ===== SAVE / UPDATE CHAPTER =====
+  async function saveChapter() {
+    const book_id = document.getElementById("book-select").value;
+    const chapter_number =
+      parseInt(document.getElementById("chapter-number").value);
+    const title = document.getElementById("chapter-title").value;
+    const content = document.getElementById("chapter-content").value;
+
+    if (!book_id || !chapter_number || !title || !content)
+      return alert("All fields required");
+
+    const { error } = await supabaseClient
+      .from("chapters")
+      .upsert(
+        [{ book_id, chapter_number, title, content }],
+        { onConflict: "book_id,chapter_number" }
+      );
+
+    if (error) alert(error.message);
+    else alert("Chapter saved");
+  }
+
+  // ===== DELETE BOOK =====
+  async function deleteBook() {
+    const book_id = document.getElementById("book-select").value;
+    if (!book_id) return;
+
+    if (!confirm("Delete book and all chapters?")) return;
+
+    const { error } = await supabaseClient
+      .from("books")
+      .delete()
+      .eq("id", book_id);
+
+    if (error) alert(error.message);
+    else {
+      alert("Book deleted");
+      loadBooks();
+    }
+  }
+
+  // ===== AUTO LOGIN =====
+  supabaseClient.auth.getSession().then(({ data }) => {
+    if (data.session) init();
+  });
+</script>
+
+</body>
+</html>

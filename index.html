@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Night Ink</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    :root {
+      --bg: #0d0f14;
+      --text: #e9e9ee;
+      --muted: #9a9aa5;
+      --divider: rgba(255,255,255,0.08);
+      --accent: #c6c6ff;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Georgia, "Times New Roman", serif;
+      line-height: 1.8;
+    }
+
+    header {
+      max-width: 70ch;
+      margin: 90px auto 60px;
+      padding: 0 20px;
+    }
+
+    header h1 {
+      font-size: 2.4rem;
+      font-weight: normal;
+      margin-bottom: 12px;
+    }
+
+    header p {
+      color: var(--muted);
+      font-size: 1rem;
+    }
+
+    main {
+      max-width: 70ch;
+      margin: auto;
+      padding: 0 20px 120px;
+    }
+
+    .book {
+      margin-bottom: 70px;
+    }
+
+    .book-title {
+      font-size: 1.3rem;
+      margin-bottom: 8px;
+    }
+
+    .book-desc {
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    .book a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+
+    .book a:hover {
+      text-decoration: underline;
+    }
+
+    hr {
+      border: none;
+      height: 1px;
+      background: var(--divider);
+      margin: 70px 0;
+    }
+
+    footer {
+      max-width: 70ch;
+      margin: auto;
+      padding: 40px 20px 80px;
+      font-size: 0.85rem;
+      color: var(--muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Night Ink</h1>
+  <p>A collection of stories, written over time.</p>
+</header>
+
+<main id="catalog">
+  <!-- Books injected here -->
+</main>
+
+<footer>
+  © 2026 — Written by K08149
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  const supabaseClient = supabase.createClient(
+    "https://plaxykqkhnbelwajltdk.supabase.co",
+    "sb_publishable_iEV5oVbJCvpFxslRyu5eNw_oMv2qvBt"
+  );
+
+  async function loadBooks() {
+    const { data, error } = await supabaseClient
+      .from("books")
+      .select("id, title, description")
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    const catalog = document.getElementById("catalog");
+    catalog.innerHTML = "";
+
+    data.forEach((book, index) => {
+      const div = document.createElement("div");
+      div.className = "book";
+
+      div.innerHTML = `
+        <div class="book-title">${book.title}</div>
+        <div class="book-desc">${book.description || ""}</div>
+        <a href="book.html?book=${book.id}">Begin reading →</a>
+      `;
+
+      catalog.appendChild(div);
+
+      if (index < data.length - 1) {
+        catalog.appendChild(document.createElement("hr"));
+      }
+    });
+  }
+
+  loadBooks();
+</script>
+
+</body>
+</html>

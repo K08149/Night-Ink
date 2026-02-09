@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Night Ink</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    :root {
+      --bg: #0d0f14;
+      --text: #e9e9ee;
+      --muted: #9a9aa5;
+      --divider: rgba(255,255,255,0.08);
+      --accent: #c6c6ff;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Georgia, "Times New Roman", serif;
+      line-height: 1.9;
+    }
+
+    header {
+      max-width: 70ch;
+      margin: 90px auto 50px;
+      padding: 0 20px;
+    }
+
+    header a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+
+    header h1 {
+      font-size: 2.4rem;
+      font-weight: normal;
+      margin: 10px 0;
+    }
+
+    header p {
+      color: var(--muted);
+      font-size: 1rem;
+    }
+
+    main {
+      max-width: 70ch;
+      margin: auto;
+      padding: 0 20px 120px;
+    }
+
+    .chapter-title {
+      font-size: 1.2rem;
+      margin-bottom: 6px;
+    }
+
+    .chapter-meta {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 22px;
+    }
+
+    .chapter-content p {
+      margin-bottom: 1.6em;
+    }
+
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 70px;
+    }
+
+    .nav a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+
+    footer {
+      max-width: 70ch;
+      margin: auto;
+      padding: 40px 20px 80px;
+      font-size: 0.85rem;
+      color: var(--muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <a href="index.html">← Back to catalog</a>
+  <h1 id="book-title"></h1>
+  <p id="book-description"></p>
+</header>
+
+<main>
+  <section id="chapter"></section>
+
+  <div class="nav">
+    <a id="prev"></a>
+    <a id="next"></a>
+  </div>
+</main>
+
+<footer>
+  © 2026 — Written by K08149
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  // ============================
+  // SUPABASE CLIENT
+  // ============================
+  const supabaseClient = supabase.createClient(
+    "https://plaxykqkhnbelwajltdk.supabase.co",
+    "sb_publishable_iEV5oVbJCvpFxslRyu5eNw_oMv2qvBt"
+  );
+
+  // ============================
+  // URL PARAMS
+  // ============================
+  const params = new URLSearchParams(window.location.search);
+  const bookId = params.get("book");
+  let chapterNumber = params.get("chapter")
+    ? parseInt(params.get("chapter"), 10)
+    : null;
+
+  if (!bookId) {
+    document.getElementById("chapter").innerHTML =
+      "<p>Book not found.</p>";
+    throw new Error("Missing book ID");
+  }
+
+  // ============================
+  // LOAD BOOK
+  // ============================
+  async function loadBook() {
+    const { data, error } = await supabaseClient
+      .from("books")
+      .select("title, description")
+      .eq("id", bookId)
+      .single();
+
+    if (error) {
+      console.error("Book load error:", error);
+      return;
+    }
+
+    document.getElementById("book-title").textContent = data.title;
+    document.getElementById("book-description").textContent =
+      data.description || "";
+  }
+
+  // ============================
+  // LOAD CHAPTER
+  // ============================
+  async function loadChapter() {
+    // No chapter specified → load first available
+    if (!chapterNumber) {
+      const { data, error } = await supabaseClient
+        .from("chapters")
+        .select("chapter_number")
+        .eq("book_id", bookId)
+        .order("chapter_number", { ascending: true })
+        .limit(1)
+        .single();
+
+      if (error || !data) {
+        document.getElementById("chapter").innerHTML =
+          "<p>No chapters published yet.</p>";
+        return;
+      }
+
+      window.location.href =
+        `book.html?book=${bookId}&chapter=${data.chapter_number}`;
+      return;
+    }
+
+    // Load requested chapter
+    const { data, error } = await supabaseClient
+      .from("chapters")
+      .select("chapter_number, title, content, created_at")
+      .eq("book_id", bookId)
+      .eq("chapter_number", chapterNumber)
+      .single();
+
+    if (error || !data) {
+      document.getElementById("chapter").innerHTML =
+        "<p>This chapter does not exist.</p>";
+      return;
+    }
+
+    document.getElementById("chapter").innerHTML = `
+      <div class="chapter-title">
+        Chapter ${data.chapter_number}: ${data.title}
+      </div>
+      <div class="chapter-meta">
+        ${new Date(data.created_at).toDateString()}
+      </div>
+      <div class="chapter-content">
+        ${data.content
+          .split("\n")
+          .map(p => `<p>${p}</p>`)
+          .join("")}
+      </div>
+    `;
+
+    setupNavigation();
+  }
+
+  // ============================
+  // NAVIGATION
+  // ============================
+  async function setupNavigation() {
+    const { data } = await supabaseClient
+      .from("chapters")
+      .select("chapter_number")
+      .eq("book_id", bookId)
+      .order("chapter_number", { ascending: true });
+
+    const numbers = data.map(c => c.chapter_number);
+    const index = numbers.indexOf(chapterNumber);
+
+    const prev = document.getElementById("prev");
+    const next = document.getElementById("next");
+
+    if (numbers[index - 1]) {
+      prev.textContent = "← Previous chapter";
+      prev.href =
+        `book.html?book=${bookId}&chapter=${numbers[index - 1]}`;
+    } else {
+      prev.textContent = "";
+    }
+
+    if (numbers[index + 1]) {
+      next.textContent = "Next chapter →";
+      next.href =
+        `book.html?book=${bookId}&chapter=${numbers[index + 1]}`;
+    } else {
+      next.textContent = "";
+    }
+  }
+
+  // ============================
+  // INIT
+  // ============================
+  loadBook();
+  loadChapter();
+</script>
+
+</body>
+</html>
