@@ -43,6 +43,7 @@
       max-width: 70ch;
       margin: auto;
       padding: 0 20px 120px;
+      min-height: 200px;
     }
 
     .book {
@@ -76,6 +77,11 @@
       margin: 70px 0;
     }
 
+    .status {
+      color: var(--muted);
+      font-style: italic;
+    }
+
     footer {
       max-width: 70ch;
       margin: auto;
@@ -94,7 +100,7 @@
 </header>
 
 <main id="catalog">
-  <!-- Books injected here -->
+  <p class="status">Loading stories...</p>
 </main>
 
 <footer>
@@ -105,21 +111,35 @@
 <script>
   const supabaseClient = supabase.createClient(
     "https://plaxykqkhnbelwajltdk.supabase.co",
-    "sb_publishable_iEV5oVbJCvpFxslRyu5eNw_oMv2qvBt"
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYXh5a3FraG5iZWx3YWpsdGRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg1OTI1NTAsImV4cCI6MjA4NDE2ODU1MH0.nYpEAEBVZH-3WSUeBrSnCJSUYPopvmfzIXiUnlHwt7M"
   );
 
-  async function loadBooks() {
+  async function loadBooks(retry = 0) {
+    const catalog = document.getElementById("catalog");
+
     const { data, error } = await supabaseClient
       .from("books")
       .select("id, title, description")
       .order("created_at", { ascending: true });
 
     if (error) {
-      console.error(error);
+      console.error("Supabase error:", error);
+      catalog.innerHTML = `<p class="status">Unable to load stories.</p>`;
       return;
     }
 
-    const catalog = document.getElementById("catalog");
+    // If DB is waking up (free tier cold start)
+    if (!data || data.length === 0) {
+      if (retry < 3) {
+        catalog.innerHTML = `<p class="status">Waking the archive...</p>`;
+        setTimeout(() => loadBooks(retry + 1), 2000);
+        return;
+      } else {
+        catalog.innerHTML = `<p class="status">No stories available.</p>`;
+        return;
+      }
+    }
+
     catalog.innerHTML = "";
 
     data.forEach((book, index) => {
@@ -144,4 +164,4 @@
 </script>
 
 </body>
-</html>
+</html>  
